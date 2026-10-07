@@ -31,10 +31,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential ccache git libffi-dev libssl-dev python3-dev zip unzip autoconf libtool pkg-config zlib1g-dev libltdl-dev gfortran
 
-    - name: Install Buildozer & Cython
+    - name: Install Buildozer & Fixed Cython
       run: |
         python -m pip install --upgrade pip
-        pip install "cython<3.0.0" buildozer
+        pip install "cython==0.29.36" buildozer
 
     - name: Inject GEMINI_API_KEY into .env
       env:
@@ -42,12 +42,16 @@ jobs:
       run: |
         echo "GEMINI_API_KEY=${GEMINI_API_KEY}" > .env
 
+    - name: Clean Previous Builds
+      run: |
+        rm -rf .buildozer
+
     - name: Build Debug APK with Buildozer
       run: |
         buildozer android debug
 
-    - name: Upload Universal APK Artifact
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ULTRA-AI-Universal-APK
+        name: ULTRA-AI-APK
         path: bin/*.apk
