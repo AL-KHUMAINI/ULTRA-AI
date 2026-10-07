@@ -50,8 +50,13 @@ jobs:
       run: |
         buildozer android debug
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
+    - name: Compress APK to TarGz for Mobile Compatibility
+      run: |
+        cd bin
+        tar -czvf ultra-ai.tar.gz *.apk
+
+    - name: Upload TarGz Artifact
+      uses: actions/upload-artifact@v3
       with:
-        name: ULTRA-AI-APK
-        path: bin/*.apk
+        name: ULTRA-AI-TAR
+        path: bin/ultra-ai.tar.gz
