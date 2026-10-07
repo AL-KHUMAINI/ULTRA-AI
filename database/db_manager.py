@@ -23,18 +23,21 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        email TEXT PRIMARY KEY,
+                        tier TEXT DEFAULT 'FREE',
+                        messages_used INTEGER DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS chat_history (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_email TEXT,
                         sender TEXT NOT NULL,
                         message TEXT NOT NULL,
                         language_code TEXT DEFAULT 'en',
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS app_settings (
-                        key TEXT PRIMARY KEY,
-                        value TEXT NOT NULL
                     )
                 """)
                 conn.commit()
@@ -43,43 +46,52 @@ class DatabaseManager:
             logger.error(f"Failed to initialize database: {e}")
             raise DatabaseError(f"Database initialization error: {e}")
 
-    def save_message(self, sender, message, language_code="en"):
+    def get_or_create_user(self, email):
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+                user = cursor.fetchone()
+                if not user:
+                    cursor.execute("INSERT INTO users (email, tier, messages_used) VALUES (?, 'FREE', 0)", (email,))
+                    conn.commit()
+                    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+                    user = cursor.fetchone()
+                return dict(user)
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get or create user: {e}")
+            raise DatabaseError(f"User DB error: {e}")
+
+    def update_user_tier(self, email, tier):
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET tier = ? WHERE email = ?", (tier, email))
+                conn.commit()
+                logger.info(f"Updated user {email} tier to {tier}")
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update user tier: {e}")
+            raise DatabaseError(f"Tier update error: {e}")
+
+    def increment_user_message(self, email):
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET messages_used = messages_used + 1 WHERE email = ?", (email,))
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to increment message count: {e}")
+
+    def save_message(self, user_email, sender, message, language_code="en"):
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO chat_history (sender, message, language_code) VALUES (?, ?, ?)",
-                    (sender, message, language_code)
+                    "INSERT INTO chat_history (user_email, sender, message, language_code) VALUES (?, ?, ?, ?)",
+                    (user_email, sender, message, language_code)
                 )
                 conn.commit()
-                return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error(f"Failed to save message: {e}")
-            raise DatabaseError(f"Failed to save message: {e}")
-
-    def fetch_chat_history(self, limit=50):
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT sender, message, language_code, timestamp FROM chat_history ORDER BY id DESC LIMIT ?",
-                    (limit,)
-                )
-                rows = cursor.fetchall()
-                return [dict(row) for row in reversed(rows)]
-        except sqlite3.Error as e:
-            logger.error(f"Failed to fetch chat history: {e}")
-            raise DatabaseError(f"Failed to fetch chat history: {e}")
-
-    def clear_chat_history(self):
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM chat_history")
-                conn.commit()
-                logger.info("Chat history cleared.")
-        except sqlite3.Error as e:
-            logger.error(f"Failed to clear chat history: {e}")
-            raise DatabaseError(f"Failed to clear chat history: {e}")
 
 db_manager = DatabaseManager()

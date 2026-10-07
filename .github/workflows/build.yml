@@ -36,9 +36,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install "cython<3.0.0" buildozer
 
-    - name: Build Debug APK with Buildozer
+    - name: Inject GEMINI_API_KEY into .env
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        echo "GEMINI_API_KEY=${GEMINI_API_KEY}" > .env
+
+    - name: Build Debug APK with Buildozer
       run: |
         buildozer android debug
 
