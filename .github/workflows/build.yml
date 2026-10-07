@@ -46,8 +46,8 @@ jobs:
       run: |
         buildozer android debug
 
-    - name: Upload APK Artifact
+    - name: Upload Universal APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ULTRA-AI-APK
+        name: ULTRA-AI-Universal-APK
         path: bin/*.apk
