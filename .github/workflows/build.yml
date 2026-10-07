@@ -29,7 +29,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential ccache git libffi-dev libssl-dev python3-dev zip unzip autoconf libtool pkg-config zlib1g-dev libltdl-dev
+        sudo apt-get install -y build-essential ccache git libffi-dev libssl-dev python3-dev zip unzip autoconf libtool pkg-config zlib1g-dev libltdl-dev gfortran
 
     - name: Install Buildozer & Cython
       run: |
