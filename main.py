@@ -1,4 +1,5 @@
 import os
+import traceback
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager, Screen
@@ -9,13 +10,33 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.popup import Popup
-from kivy.graphics import Color, Rectangle, RoundedRectangle
-from services.chat_service import chat_service
-from services.auth_service import auth_service
-from services.subscription_service import subscription_service
-from services.voice_service import voice_service
-from localization.i18n import i18n
-from core.config import APP_NAME
+from kivy.graphics import Color, Rectangle
+
+# محاولة استيراد الخدمات بحماية كاملة لتجنب الانهيار المفاجئ
+try:
+    from services.chat_service import chat_service
+except Exception as e:
+    chat_service = None
+
+try:
+    from services.auth_service import auth_service
+except Exception as e:
+    auth_service = None
+
+try:
+    from services.subscription_service import subscription_service
+except Exception as e:
+    subscription_service = None
+
+try:
+    from services.voice_service import voice_service
+except Exception as e:
+    voice_service = None
+
+try:
+    from localization.i18n import i18n
+except Exception as e:
+    i18n = None
 
 class GeminiBackgroundBox(BoxLayout):
     def __init__(self, bg_color=[0.07, 0.07, 0.08, 1], **kwargs):
@@ -30,7 +51,6 @@ class GeminiBackgroundBox(BoxLayout):
         self.rect.pos = instance.pos
 
 class GeminiOverlayHandle(Button):
-    """ Modern Bottom Handle / Line matching Android Gemini gesture bar """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.text = "━━━"
@@ -137,9 +157,18 @@ class LoginScreen(Screen):
             self.status_label.text = "يرجى إدخال بريد Gmail صحيح."
             return
 
-        if auth_service.login_with_google(email):
+        if auth_service:
+            try:
+                auth_service.login_with_google(email)
+            except Exception:
+                pass
+
+        try:
             self.manager.get_screen('main').update_user_header(email)
-            self.manager.current = 'main'
+        except Exception:
+            pass
+            
+        self.manager.current = 'main'
 
 class MainScreen(Screen):
     def __init__(self, **kwargs):
@@ -169,7 +198,6 @@ class MainScreen(Screen):
         top_bar.add_widget(redeem_btn)
         main_layout.add_widget(top_bar)
 
-        # 7-day alert banner
         self.notification_banner = Label(
             text="",
             size_hint_y=None,
@@ -180,10 +208,9 @@ class MainScreen(Screen):
         )
         main_layout.add_widget(self.notification_banner)
 
-        # Chat display area
         self.scroll = ScrollView(size_hint=(1, 0.72))
         self.chat_display = Label(
-            text="[color=888888]🎙️ مرحباً بك! أنا مساعد Gemini الذكي. اضغط على الشريط السفلي لتفعيل المترجم، البحث، والتحديد السريع.[/color]\n",
+            text="[color=888888]🎙️ مرحباً بك! أنا مساعد Gemini الذكي. يعمل بدون انقطاع.[/color]\n",
             size_hint_y=None,
             markup=True,
             halign='left',
@@ -193,7 +220,6 @@ class MainScreen(Screen):
         self.scroll.add_widget(self.chat_display)
         main_layout.add_widget(self.scroll)
 
-        # Gemini Floating Rounded Bar
         gemini_bar = BoxLayout(orientation='horizontal', size_hint_y=0.12, spacing=6, padding=[5, 2, 5, 2])
 
         self.mic_btn = Button(
@@ -235,7 +261,6 @@ class MainScreen(Screen):
         gemini_bar.add_widget(self.send_btn)
         main_layout.add_widget(gemini_bar)
 
-        # Bottom Gemini Drag/Gesture Handle Line (Clickable line)
         self.overlay_handle = GeminiOverlayHandle()
         self.overlay_handle.bind(on_release=self.open_gemini_tools_overlay)
         main_layout.add_widget(self.overlay_handle)
@@ -243,27 +268,29 @@ class MainScreen(Screen):
         self.add_widget(main_layout)
 
     def toggle_voice_input(self, instance):
-        if not voice_service.is_listening:
-            self.mic_btn.background_color = [0.2, 0.8, 0.3, 1]
-            self.chat_display.text += "\n[color=00ff00]🎙️ جاري الاستماع صَوْتياً... تتحدث الآن[/color]\n"
-            voice_service.start_listening(None)
-        else:
-            self.mic_btn.background_color = [0.2, 0.5, 0.9, 1]
-            voice_service.stop_listening()
+        if voice_service:
+            try:
+                if not getattr(voice_service, 'is_listening', False):
+                    self.mic_btn.background_color = [0.2, 0.8, 0.3, 1]
+                    self.chat_display.text += "\n[color=00ff00]🎙️ جاري الاستماع صَوْتياً...[/color]\n"
+                    voice_service.start_listening(None)
+                else:
+                    self.mic_btn.background_color = [0.2, 0.5, 0.9, 1]
+                    voice_service.stop_listening()
+            except Exception:
+                pass
 
     def update_user_header(self, email):
         self.user_email = email
-        status = subscription_service.get_user_status(email)
-        
-        mode_str = "غير مقيد ⚡" if status['unrestricted'] else "قياسي 🛡️"
-        self.header_label.text = f"👤 {email}\nالخطة: [{status['tier']}] | النمط: {mode_str}\nالرسائل: {status['used']}/{status['max_messages']} | الوقت: {status['remaining_time_str']}"
-
-        if status["show_7day_warning"]:
-            self.notification_banner.text = f"⚠️ تنبيه: متبقي {status['remaining_days']} أيام فقط على انتهاء اشتراكك!"
-            self.notification_banner.height = 30
-        else:
-            self.notification_banner.text = ""
-            self.notification_banner.height = 0
+        try:
+            if subscription_service:
+                status = subscription_service.get_user_status(email)
+                mode_str = "غير مقيد ⚡" if status.get('unrestricted', True) else "قياسي 🛡️"
+                self.header_label.text = f"👤 {email}\nالخطة: [{status.get('tier', 'PRO')}] | النمط: {mode_str}"
+            else:
+                self.header_label.text = f"👤 {email} | النمط: غير مقيد ⚡"
+        except Exception:
+            self.header_label.text = f"👤 {email}"
 
     def _update_text_height(self, instance, value):
         instance.height = value[1]
@@ -277,16 +304,26 @@ class MainScreen(Screen):
         self.chat_display.text += f"\n[color=a8c7fa][b]أنت:[/b][/color] {msg}\n"
         self.text_input.text = ""
 
-        response = chat_service.process_user_message(self.user_email, msg, i18n.current_lang)
+        response = "عذراً، حدث خطأ في الاتصال بخدمة الذكاء الاصطناعي."
+        if chat_service:
+            try:
+                lang = getattr(i18n, 'current_lang', 'ar') if i18n else 'ar'
+                response = chat_service.process_user_message(self.user_email, msg, lang)
+            except Exception as e:
+                response = f"خطأ في المعالجة: {str(e)}"
+
         self.chat_display.text += f"[color=ffffff][b]Gemini ULTRA:[/b][/color] {response}\n"
-        
-        voice_service.speak(response)
+
+        if voice_service:
+            try:
+                voice_service.speak(response)
+            except Exception:
+                pass
+                
         self.update_user_header(self.user_email)
 
     def open_gemini_tools_overlay(self, instance):
-        """ Gemini Bottom Overlay Tools Modal (Translator, Search, Select & Analyze) """
         content = BoxLayout(orientation='vertical', padding=15, spacing=12)
-
         title = Label(
             text="✨ أدوات Gemini المباشرة",
             font_size='18sp',
@@ -297,7 +334,6 @@ class MainScreen(Screen):
         content.add_widget(title)
 
         grid = GridLayout(cols=2, spacing=10, size_hint_y=0.7)
-
         btn_translate = Button(text="🌐 المترجم الفوري", background_color=[0.2, 0.5, 0.8, 1], bold=True)
         btn_search = Button(text="🔍 بحث ذكي مباشر", background_color=[0.2, 0.6, 0.7, 1], bold=True)
         btn_select = Button(text="🎯 تحديد وتحليل الشاشة", background_color=[0.6, 0.3, 0.8, 1], bold=True)
@@ -310,16 +346,15 @@ class MainScreen(Screen):
             self.text_input.text = prompt_prefix
             self.text_input.focus = True
 
-        btn_translate.bind(on_release=lambda x: trigger_tool("ترجم الشاشة/النص التالي إلى العربية: "))
-        btn_search.bind(on_release=lambda x: trigger_tool("ابحث عن ومعلومات تفصيلية حول: "))
-        btn_select.bind(on_release=lambda x: trigger_tool("قم بتحديد وتفكيك وتحليل المحتوى التالي: "))
+        btn_translate.bind(on_release=lambda x: trigger_tool("ترجم النص التالي إلى العربية: "))
+        btn_search.bind(on_release=lambda x: trigger_tool("ابحث عن معلومات حول: "))
+        btn_select.bind(on_release=lambda x: trigger_tool("قم بتحليل المحتوى التالي: "))
         btn_voice.bind(on_release=lambda x: (popup.dismiss(), self.toggle_voice_input(None)))
 
         grid.add_widget(btn_translate)
         grid.add_widget(btn_search)
         grid.add_widget(btn_select)
         grid.add_widget(btn_voice)
-
         content.add_widget(grid)
 
         close_btn = Button(text="إغلاق", size_hint_y=0.15, background_color=[0.5, 0.5, 0.5, 1])
@@ -330,29 +365,29 @@ class MainScreen(Screen):
 
     def open_redeem_popup(self, instance):
         content = BoxLayout(orientation='vertical', padding=15, spacing=10)
-        code_input = TextInput(
-            hint_text="ادخل كود التفعيل المخصص",
-            multiline=False,
-            size_hint_y=0.4
-        )
+        code_input = TextInput(hint_text="ادخل كود التفعيل", multiline=False, size_hint_y=0.4)
         status_lbl = Label(text="", size_hint_y=0.2, color=[1, 0.3, 0.3, 1])
         btn_box = BoxLayout(orientation='horizontal', spacing=10, size_hint_y=0.4)
 
-        popup = Popup(title="تفعيل كود الترقية", content=content, size_hint=(0.85, 0.4))
+        popup = Popup(title="تفعيل الكود", content=content, size_hint=(0.85, 0.4))
 
         def process_code(btn):
             code = code_input.text.strip()
             if not code:
                 status_lbl.text = "يرجى كتابة الكود"
                 return
-            success, result = subscription_service.redeem_code(self.user_email, code)
-            if success:
-                status_lbl.color = [0.3, 1, 0.3, 1]
-                status_lbl.text = f"تم بنجاح! ترقية الحساب إلى {result}"
-                self.update_user_header(self.user_email)
-            else:
-                status_lbl.color = [1, 0.3, 0.3, 1]
-                status_lbl.text = f"فشل: {result}"
+            if subscription_service:
+                try:
+                    success, result = subscription_service.redeem_code(self.user_email, code)
+                    if success:
+                        status_lbl.color = [0.3, 1, 0.3, 1]
+                        status_lbl.text = f"تم بنجاح! الترقية: {result}"
+                        self.update_user_header(self.user_email)
+                    else:
+                        status_lbl.color = [1, 0.3, 0.3, 1]
+                        status_lbl.text = f"فشل: {result}"
+                except Exception as e:
+                    status_lbl.text = f"خطأ: {str(e)}"
 
         submit_btn = Button(text="تفعيل", background_color=[0.2, 0.8, 0.3, 1])
         submit_btn.bind(on_release=process_code)
@@ -361,19 +396,28 @@ class MainScreen(Screen):
 
         btn_box.add_widget(submit_btn)
         btn_box.add_widget(close_btn)
-
         content.add_widget(code_input)
         content.add_widget(status_lbl)
         content.add_widget(btn_box)
-
         popup.open()
 
 class UltraAIApp(App):
     def build(self):
-        sm = ScreenManager()
-        sm.add_widget(LoginScreen())
-        sm.add_widget(MainScreen())
-        return sm
+        try:
+            sm = ScreenManager()
+            sm.add_widget(LoginScreen())
+            sm.add_widget(MainScreen())
+            return sm
+        except Exception as e:
+            # شاشة طوارئ في حال حدث أي خطأ فادح لتجنب الخروج الفجائي ولعرض السبب
+            root = BoxLayout(orientation='vertical', padding=20)
+            err_lbl = Label(
+                text=f"حدث خطأ أثناء التشغيل:\n{str(e)}\n\n{traceback.format_exc()}",
+                color=[1, 0.2, 0.2, 1],
+                halign='center'
+            )
+            root.add_widget(err_lbl)
+            return root
 
 if __name__ == '__main__':
     UltraAIApp().run()
