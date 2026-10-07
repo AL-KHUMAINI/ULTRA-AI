@@ -1,0 +1,7 @@
+build/
+bin/
+.gradle/
+.env
+__pycache__/
+*.pyc
+*.apk
