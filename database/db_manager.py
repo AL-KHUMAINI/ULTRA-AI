@@ -40,6 +40,18 @@ class DatabaseManager:
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS redeem_codes (
+                        code TEXT PRIMARY KEY,
+                        tier TEXT NOT NULL,
+                        is_used INTEGER DEFAULT 0
+                    )
+                """)
+                # Insert default preset promo codes
+                cursor.execute("INSERT OR IGNORE INTO redeem_codes (code, tier) VALUES ('PRO-2026', 'PRO')")
+                cursor.execute("INSERT OR IGNORE INTO redeem_codes (code, tier) VALUES ('ULTRA-VIP', 'PRO_ULTRA')")
+                cursor.execute("INSERT OR IGNORE INTO redeem_codes (code, tier) VALUES ('ULTRA-MAX', 'PRO_ULTRA')")
+
                 conn.commit()
                 logger.info("Database initialized successfully.")
         except sqlite3.Error as e:
@@ -72,6 +84,22 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.error(f"Failed to update user tier: {e}")
             raise DatabaseError(f"Tier update error: {e}")
+
+    def redeem_code_for_user(self, email, code):
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM redeem_codes WHERE code = ?", (code,))
+                item = cursor.fetchone()
+                if item:
+                    tier = item["tier"]
+                    cursor.execute("UPDATE users SET tier = ? WHERE email = ?", (tier, email))
+                    conn.commit()
+                    return True, tier
+                return False, "Invalid Code"
+        except sqlite3.Error as e:
+            logger.error(f"Failed to redeem code: {e}")
+            return False, "Database Error"
 
     def increment_user_message(self, email):
         try:

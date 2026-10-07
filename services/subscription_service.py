@@ -34,11 +34,7 @@ class SubscriptionService:
             return True
         return False
 
-    def admin_set_user_tier(self, email, tier):
-        valid_tiers = ["FREE", "PRO", "PRO_ULTRA"]
-        if tier in valid_tiers:
-            self.db.update_user_tier(email, tier)
-            return True
-        return False
+    def redeem_code(self, email, code):
+        return self.db.redeem_code_for_user(email, code.strip())
 
 subscription_service = SubscriptionService()
