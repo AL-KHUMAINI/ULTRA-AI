@@ -7,8 +7,9 @@ except ImportError:
 
 class ChatService:
     def __init__(self):
-        self.api_key = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
-        if genai and self.api_key and self.api_key != "YOUR_GEMINI_API_KEY_HERE":
+        # ضع مفتاح Gemini API الحقيقي هنا مباشرة
+        self.api_key = "YOUR_ACTUAL_API_KEY"
+        if genai and self.api_key and self.api_key != "YOUR_ACTUAL_API_KEY":
             try:
                 genai.configure(api_key=self.api_key)
                 self.model = genai.GenerativeModel('gemini-1.5-flash')
@@ -19,12 +20,12 @@ class ChatService:
 
     def process_user_message(self, user_email, message, lang='en'):
         if not self.model:
-            return f"UL ULTRA: I received your message -> '{message}'. (Please configure your API Key to get live responses)."
+            return "ULT Error: API Key is not configured. Please add your Gemini API Key in chat_service.py."
         
         try:
             response = self.model.generate_content(message)
             return response.text
         except Exception as e:
-            return f"UL ULTRA Error: {str(e)}"
+            return f"ULT Error: {str(e)}"
 
 chat_service = ChatService()
